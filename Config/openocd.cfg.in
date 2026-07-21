@@ -1,0 +1,6 @@
+source [find @OPENOCD_INTERFACE@]
+
+transport select hla_swd
+adapter speed @OPENOCD_SPEED_KHZ@
+
+source [find @OPENOCD_TARGET@]

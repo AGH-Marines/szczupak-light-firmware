@@ -1,0 +1,23 @@
+{
+    "C header file": {
+        "scope": "c,cpp",
+        "prefix": "hdr",
+        "isFileTemplate": true,
+        "body": [
+            "/*",
+            " *  ${TM_FILENAME}",
+            " *",
+            " *  Created on: ${CURRENT_DATE} ${CURRENT_MONTH_NAME_SHORT} ${CURRENT_YEAR}",
+            " *  Author: ${2:Name Surname}",
+            " */",
+            "",
+            "#ifndef ${TM_FILENAME_BASE/(.*)/${1:/upcase}/}_H",
+            "#define ${TM_FILENAME_BASE/(.*)/${1:/upcase}/}_H",
+            "",
+            "$0",
+            "",
+            "#endif /* ${TM_FILENAME_BASE/(.*)/${1:/upcase}/}_H */"
+        ],
+        "description": "Create C header template"
+    }
+}
