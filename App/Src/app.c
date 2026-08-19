@@ -14,6 +14,7 @@
 
 #include "task_diagnostics.h"
 #include "task_debug.h"
+#include "task_led.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -28,6 +29,7 @@ void app_init(void) {
 
     task_diagnostics_init();
     task_debug_init();
+    task_led_init();
 
     xTaskCreate(app_task, "APP_TASK", 300, NULL, 1, NULL);
 }

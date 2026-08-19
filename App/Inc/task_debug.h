@@ -12,8 +12,6 @@
 
 #if DEBUGGER_ENABLED
 
-typedef enum app_command { APP_COMMAND_REQUEST_REGISTERS = 1, APP_COMMAND_USER } app_command;
-
 typedef enum signal {
     SIGNAL_COUNTER8,
     SIGNAL_LED1,

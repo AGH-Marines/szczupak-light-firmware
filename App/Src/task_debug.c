@@ -1,13 +1,17 @@
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "task_debug.h"
 #include "task_diagnostics.h"
+#include "task_led.h"
 #include "tasks_config.h"
 
 #include "debugger.h"
 #include "platform_uart.h"
 #include "platform_led.h"
+#include "platform_pwm.h"
 
 #include "FreeRTOS.h"
 #include "semphr.h"
@@ -21,6 +25,7 @@
 static void task_debug(void* pvParameters);
 static void send_registers(void);
 static void log_data_to_queue(const uint8_t* data, size_t length);
+static void handle_command(debugger_command_t* current_command);
 static void task_debug_uart_tx_completed(void);
 static void task_debug_uart_send(const uint8_t* data, size_t length);
 
@@ -34,6 +39,8 @@ typedef struct {
     uint8_t length;
     uint8_t data[DEBUGGER_MAX_LOG_FRAME_LENGTH]; /* 179 B — największa ramka przez tę kolejkę */
 } debug_log_frame_t;
+
+typedef enum app_command { APP_COMMAND_REQUEST_REGISTERS = 1, APP_COMMAND_USER } app_command;
 
 void task_debug_init() {
     log_queue = xQueueCreate(LOG_QUEUE_LENGTH, sizeof(debug_log_frame_t));
@@ -92,6 +99,54 @@ static void log_data_to_queue(const uint8_t* data, size_t length) {
     }
 }
 
+static void handle_command(debugger_command_t* current_command) {
+    if (current_command == NULL) {
+        return;
+    }
+    const app_command command = (app_command)current_command->command_type;
+    switch (command) {
+        case APP_COMMAND_REQUEST_REGISTERS:
+            debugger_log_info(tag, "Registers requested");
+            send_registers();
+            break;
+        case APP_COMMAND_USER: {
+            const char* cmd = debugger_get_command_arg(current_command, 0);
+            if ((cmd == NULL) || (strcmp(cmd, "SET_LED") != 0)) {
+                debugger_log_warning(tag, "Invalid user command");
+                break;
+            }
+            const char* arg_channel = debugger_get_command_arg(current_command, 1);
+            const char* arg_percentage = debugger_get_command_arg(current_command, 2);
+
+            char* end = NULL;
+            unsigned long channel = strtoul(arg_channel, &end, 10);
+            if ((arg_channel == NULL) || (end == arg_channel) || (*end != '\0') ||
+                (channel < 1UL) || (channel > PLATFORM_PWM_CHANNELS_COUNT)) {
+                break;
+            }
+
+            end = NULL;
+            unsigned long percentage = strtoul(arg_percentage, &end, 10);
+            if ((arg_percentage == NULL) || (end == arg_percentage) || (*end != '\0') ||
+                (percentage > 100UL)) {
+                break;
+            }
+
+            uint16_t pulse = (uint16_t)((percentage * PLATFORM_PWM_MAX_PULSE) / 100UL);
+            task_led_set_pulse((platform_pwm_channel_t)(channel - 1UL), pulse);
+            break;
+        }
+
+        default: {
+            char buff[32];
+            snprintf(buff, sizeof(buff), "Invalid command with id: %d",
+                     current_command->command_type);
+            debugger_log_warning(tag, buff);
+            break;
+        }
+    }
+}
+
 static void task_debug(void* pvParameters) {
     TickType_t last_wake = xTaskGetTickCount();
 
@@ -101,14 +156,16 @@ static void task_debug(void* pvParameters) {
 
     while (1) {
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(TASK_DEBUG_DELAY_MS));
+        while (debugger_get_command(&current_command)) {
+            handle_command(&current_command);
+        }
 
         debug_log_frame_t msg;
-
         while (log_queue != NULL && xQueueReceive(log_queue, &msg, 0) == pdTRUE) {
             task_debug_uart_send(msg.data, msg.length);
         }
-        QueueHandle_t measurement_queue = task_diagnostics_get_measurement_queue();
 
+        QueueHandle_t measurement_queue = task_diagnostics_get_measurement_queue();
         if (measurement_queue != NULL &&
             xQueuePeek(measurement_queue, &measurement_frame, 0) == pdTRUE) {
             debugger_plot_signal(SIGNAL_LED1, &measurement_frame.current_led1);

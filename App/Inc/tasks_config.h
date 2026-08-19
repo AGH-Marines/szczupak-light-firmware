@@ -14,4 +14,7 @@
 #define TASK_DEBUG_PRIORITY 3
 #define TASK_DEBUG_STACK    1024
 
+#define TASK_LED_PRIORITY 2
+#define TASK_LED_STACK    512
+
 #endif /* TASKS_CONFIG_H */
