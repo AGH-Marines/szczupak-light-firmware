@@ -2,15 +2,17 @@ build/
 
 CMakeUserPresets.json
 compile_commands.json
+.mxproject
+MXTmpFiles/
 
 .vscode/.browse.VC.db*
 .vscode/ipch/
-
 *.elf
 *.hex
 *.bin
 *.map
-
+*.su
+*.lst
 *.swp
 *~
 .DS_Store
