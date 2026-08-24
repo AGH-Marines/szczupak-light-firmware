@@ -21,6 +21,10 @@ target_link_libraries(project_components INTERFACE
     component_debugger
 )
 
+target_link_libraries(component_debugger PUBLIC    
+    component_frame
+)
+
 if(BUILD_TESTING)
     add_executable(test_debugger
         Tests/test_debugger.c

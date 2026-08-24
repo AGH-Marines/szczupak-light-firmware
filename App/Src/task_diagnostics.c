@@ -37,9 +37,7 @@ static current_sense_t current_sense_led = {
 
 static TaskHandle_t diagnostics_task_handle;
 
-#if DEBUGGER_ENABLED
 static QueueHandle_t measurement_queue_handle;
-#endif
 
 QueueHandle_t task_diagnostics_get_measurement_queue() {
     return measurement_queue_handle;

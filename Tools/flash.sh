@@ -47,6 +47,6 @@ echo "OpenOCD config: $OPENOCD_CONFIG"
 
 openocd \
     -f "$OPENOCD_CONFIG" \
-    -c "program {$ELF_FILE} verify reset exit"
+    -c "init; reset halt; stm32l4x mass_erase 0; program {$ELF_FILE} verify reset exit"
 
 echo "Flash completed successfully."

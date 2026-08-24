@@ -17,4 +17,7 @@
 #define TASK_LED_PRIORITY 2
 #define TASK_LED_STACK    512
 
+#define TASK_USB_PRIORITY 2
+#define TASK_USB_STACK    512
+
 #endif /* TASKS_CONFIG_H */

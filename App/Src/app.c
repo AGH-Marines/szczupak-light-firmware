@@ -15,6 +15,7 @@
 #include "task_diagnostics.h"
 #include "task_debug.h"
 #include "task_led.h"
+#include "task_usb.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -28,6 +29,7 @@ static void app_task(void* pvParameters);
 void app_init(void) {
 
     task_diagnostics_init();
+    task_usb_init();
     task_debug_init();
     task_led_init();
 

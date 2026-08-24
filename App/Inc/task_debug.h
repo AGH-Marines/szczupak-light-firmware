@@ -9,6 +9,7 @@
 #define TASK_DEBUG_H
 
 #include "debugger.h"
+#include "app_command.h"
 
 #if DEBUGGER_ENABLED
 
@@ -18,7 +19,10 @@ typedef enum signal {
     SIGNAL_LED2,
     SIGNAL_LED3,
     SIGNAL_12V,
-    SIGNAL_USB
+    SIGNAL_USB,
+    SIGNAL_PWM_LED1,
+    SIGNAL_PWM_LED2,
+    SIGNAL_PWM_LED3
 } signal;
 
 void task_debug_init();

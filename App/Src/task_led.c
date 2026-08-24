@@ -46,7 +46,7 @@ void task_led_set_pulse(platform_pwm_channel_t channel, uint16_t pulse) {
 }
 
 uint16_t task_led_get_pulse(platform_pwm_channel_t channel) {
-    if (channel > PLATFORM_PWM_CHANNELS_COUNT) {
+    if (channel >= PLATFORM_PWM_CHANNELS_COUNT) {
         return 0;
     }
     return channels[(uint8_t)channel].actual;
