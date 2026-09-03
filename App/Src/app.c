@@ -16,6 +16,7 @@
 #include "task_debug.h"
 #include "task_led.h"
 #include "task_usb.h"
+#include "task_can.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -30,8 +31,12 @@ void app_init(void) {
 
     task_diagnostics_init();
     task_usb_init();
-    task_debug_init();
+    task_can_init();
     task_led_init();
+
+#if DEBUGGER_ENABLED
+    task_debug_init();
+#endif /* DEBUGGER_ENABLED */
 
     xTaskCreate(app_task, "APP_TASK", 300, NULL, 1, NULL);
 }

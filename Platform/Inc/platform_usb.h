@@ -23,5 +23,5 @@ void platform_usb_set_transmit_complete_callback(
 
 void platform_usb_receive_isr(const uint8_t* data, size_t length);
 void platform_usb_transmit_complete_isr(void);
-
+void platform_usb_abort_transmission(void);
 #endif /* PLATFORM_USB_H */

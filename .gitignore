@@ -16,3 +16,5 @@ MXTmpFiles/
 *.swp
 *~
 .DS_Store
+*.csv
+*.dbc

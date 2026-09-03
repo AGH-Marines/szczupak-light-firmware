@@ -7,6 +7,8 @@
 static platform_usb_receive_callback_t rx_callback;
 static platform_usb_transmit_complete_callback_t tx_complete_callback;
 
+extern USBD_HandleTypeDef hUsbDeviceFS;
+
 void platform_usb_init(void) {}
 
 bool platform_usb_transmit(const uint8_t* data, size_t length) {
@@ -43,4 +45,13 @@ void platform_usb_transmit_complete_isr(void) {
     if (tx_complete_callback != NULL) {
         tx_complete_callback();
     }
+}
+
+void platform_usb_abort_transmission(void) {
+    USBD_CDC_HandleTypeDef* usb_cdc_handle;
+    usb_cdc_handle = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+    if (usb_cdc_handle == NULL) {
+        return;
+    }
+    usb_cdc_handle->TxState = 0;
 }

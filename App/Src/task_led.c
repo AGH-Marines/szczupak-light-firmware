@@ -1,6 +1,7 @@
 #include "task_led.h"
 #include "tasks_config.h"
 #include "debugger.h"
+#include "led_brightness.h"
 
 #include "platform_pwm.h"
 
@@ -12,8 +13,9 @@
 #define LED_SWEEP_DELAY          20U
 
 typedef struct led_channel_state_t {
-    uint16_t target;
-    uint16_t actual;
+    uint8_t target_percent;
+    uint16_t target_pulse;
+    uint16_t actual_pulse;
 } led_channel_state_t;
 
 static QueueHandle_t led_command_queue;
@@ -31,57 +33,70 @@ void task_led_init(void) {
     platform_pwm_set_pulse(PLATFORM_PWM_LED3, 0);
 
     for (int i = 0; i < PLATFORM_PWM_CHANNELS_COUNT; ++i) {
-        channels[i].actual = 0;
-        channels[i].target = 0;
+        channels[i].actual_pulse = 0;
+        channels[i].target_pulse = 0;
+        channels[i].target_percent = 0;
     }
     xTaskCreate(task_led, "LED_TASK", TASK_LED_STACK, NULL, TASK_LED_PRIORITY, NULL);
 }
 
-void task_led_set_pulse(platform_pwm_channel_t channel, uint16_t pulse) {
-    if (pulse > PLATFORM_PWM_MAX_PULSE) {
-        pulse = PLATFORM_PWM_MAX_PULSE;
+void task_led_set_brightness_percent(platform_pwm_channel_t channel, uint8_t percent) {
+    if (channel >= PLATFORM_PWM_CHANNELS_COUNT) {
+        return;
     }
-    task_led_command_t command = {.channel = channel, .pulse = pulse};
+    percent = led_brightness_clamp_percent(percent);
+
+    task_led_command_t command = {.channel = channel, .percent = percent};
     xQueueSend(led_command_queue, &command, 0);
 }
 
-uint16_t task_led_get_pulse(platform_pwm_channel_t channel) {
+uint8_t task_led_get_brightness_percent(platform_pwm_channel_t channel) {
     if (channel >= PLATFORM_PWM_CHANNELS_COUNT) {
         return 0;
     }
-    return channels[(uint8_t)channel].actual;
+    return channels[(uint8_t)channel].target_percent;
+}
+
+uint16_t task_led_get_brightness_pulse(platform_pwm_channel_t channel) {
+    if (channel >= PLATFORM_PWM_CHANNELS_COUNT) {
+        return 0;
+    }
+    return channels[(uint8_t)channel].actual_pulse;
 }
 
 static void task_led(void* pvParameters) {
+
     debugger_log_info(tag, "init completed");
 
     while (1) {
         task_led_command_t led_command = {0};
         while (xQueueReceive(led_command_queue, &led_command, 0)) {
-            if (led_command.pulse > PLATFORM_PWM_MAX_PULSE) {
-                led_command.pulse = PLATFORM_PWM_MAX_PULSE;
-            }
-            channels[(uint8_t)led_command.channel].target = led_command.pulse;
+            led_command.percent = led_brightness_clamp_percent(led_command.percent);
+
+            channels[(uint8_t)led_command.channel].target_percent = led_command.percent;
+            channels[(uint8_t)led_command.channel].target_pulse =
+                led_brightness_to_pulse(led_command.percent);
         }
 
         for (int i = 0; i < PLATFORM_PWM_CHANNELS_COUNT; ++i) {
-            int32_t channel_diff = (int32_t)channels[i].target - (int32_t)channels[i].actual;
+            int32_t channel_diff =
+                (int32_t)channels[i].target_pulse - (int32_t)channels[i].actual_pulse;
             if (channel_diff > 0) {
                 if (channel_diff < LED_SWEEP_STEP) {
-                    channels[i].actual = channels[i].target;
+                    channels[i].actual_pulse = channels[i].target_pulse;
 
                 } else {
-                    channels[i].actual += LED_SWEEP_STEP;
+                    channels[i].actual_pulse += LED_SWEEP_STEP;
                 }
             } else if (channel_diff < 0) {
                 if (channel_diff > -(int32_t)LED_SWEEP_STEP) {
-                    channels[i].actual = channels[i].target;
+                    channels[i].actual_pulse = channels[i].target_pulse;
 
                 } else {
-                    channels[i].actual -= LED_SWEEP_STEP;
+                    channels[i].actual_pulse -= LED_SWEEP_STEP;
                 }
             }
-            platform_pwm_set_pulse(i, channels[i].actual);
+            platform_pwm_set_pulse(i, channels[i].actual_pulse);
         }
         vTaskDelay(pdMS_TO_TICKS(LED_SWEEP_DELAY));
     }

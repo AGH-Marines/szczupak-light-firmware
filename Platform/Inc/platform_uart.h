@@ -20,9 +20,10 @@ typedef void (*platform_uart_receive_callback_t)(const uint8_t* data, size_t len
 typedef void (*platform_uart_transmit_complete_callback_t)(void);
 
 bool platform_uart_transmit(const uint8_t* data, size_t length);
-void platform_uart_init();
+void platform_uart_init(void);
 void platform_uart_set_receive_callback(platform_uart_receive_callback_t receive_callback);
 void platform_uart_set_transmit_complete_callback(
     platform_uart_transmit_complete_callback_t transmit_callback);
+void platform_uart_abort_transmission(void);
 
 #endif /* PLATFORM_UART_H */

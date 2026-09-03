@@ -20,8 +20,9 @@
 
 #if DEBUGGER_ENABLED
 
-#define TASK_DEBUG_DELAY_MS 100U
-#define LOG_QUEUE_LENGTH    5
+#define TASK_DEBUG_DELAY_MS      100U
+#define LOG_QUEUE_LENGTH         5U
+#define UART_TRANSMIT_TIMEOUT_MS 50U
 
 static void task_debug(void* pvParameters);
 static void send_registers(void);
@@ -65,7 +66,8 @@ void task_debug_init() {
     };
     (void)debugger_init(&interface);
 
-    xTaskCreate(task_debug, "DEBUG_TASK", TASK_DEBUG_STACK, NULL, TASK_DEBUG_PRIORITY, NULL);
+    configASSERT(xTaskCreate(task_debug, "DEBUG_TASK", TASK_DEBUG_STACK, NULL, TASK_DEBUG_PRIORITY,
+                             NULL) == pdPASS);
 }
 
 static void task_debug_uart_tx_completed(void) {
@@ -82,7 +84,9 @@ static void task_debug_uart_send(const uint8_t* data, size_t length) {
     if (!platform_uart_transmit(data, length)) {
         return;
     }
-    (void)xSemaphoreTake(tx_done, portMAX_DELAY);
+    if (xSemaphoreTake(tx_done, pdMS_TO_TICKS(UART_TRANSMIT_TIMEOUT_MS)) == pdFALSE) {
+        platform_uart_abort_transmission();
+    }
 }
 
 static void send_registers(void) {
@@ -131,9 +135,7 @@ static void task_debug_handle_command(const frame_t* frame) {
                 if ((led < 1) || (led > 3) || (percent > 100)) {
                     return;
                 }
-                uint16_t pulse = (uint16_t)((uint32_t)percent * (uint32_t)PLATFORM_PWM_MAX_PULSE /
-                                            (uint32_t)100U);
-                task_led_set_pulse((platform_pwm_channel_t)(led - 1), pulse);
+                task_led_set_brightness_percent((platform_pwm_channel_t)(led - 1), percent);
             }
             break;
         }
@@ -176,15 +178,9 @@ static void task_debug(void* pvParameters) {
             debugger_plot_signal(SIGNAL_12V, &measurement_frame.voltage_12v);
             debugger_plot_signal(SIGNAL_USB, &measurement_frame.voltage_usb);
 
-            uint8_t led1_percentage =
-                (uint8_t)(((uint32_t)task_led_get_pulse(PLATFORM_PWM_LED1) * 100U) /
-                          (uint32_t)PLATFORM_PWM_MAX_PULSE);
-            uint8_t led2_percentage =
-                (uint8_t)(((uint32_t)task_led_get_pulse(PLATFORM_PWM_LED2) * 100U) /
-                          (uint32_t)PLATFORM_PWM_MAX_PULSE);
-            uint8_t led3_percentage =
-                (uint8_t)(((uint32_t)task_led_get_pulse(PLATFORM_PWM_LED3) * 100U) /
-                          (uint32_t)PLATFORM_PWM_MAX_PULSE);
+            uint8_t led1_percentage = task_led_get_brightness_percent(PLATFORM_PWM_LED1);
+            uint8_t led2_percentage = task_led_get_brightness_percent(PLATFORM_PWM_LED2);
+            uint8_t led3_percentage = task_led_get_brightness_percent(PLATFORM_PWM_LED3);
 
             debugger_plot_signal(SIGNAL_PWM_LED1, &led1_percentage);
             debugger_plot_signal(SIGNAL_PWM_LED2, &led2_percentage);

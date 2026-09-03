@@ -16,7 +16,8 @@
 #include "semphr.h"
 #include "task.h"
 
-#define TASK_USB_DELAY_MS 10U
+#define TASK_USB_DELAY_MS       10U
+#define USB_TRANSMIT_TIMEOUT_MS 50U
 
 static const char tag[] = "USB";
 
@@ -33,9 +34,11 @@ static void task_usb_handle_command(const frame_t* frame);
 void task_usb_init(void) {
     (void)frame_parser_init(&parser, command_queue, FRAME_COMMAND_QUEUE_SIZE);
     tx_done = xSemaphoreCreateBinary();
+    configASSERT(tx_done);
     platform_usb_set_receive_callback(task_usb_rx);
     platform_usb_set_transmit_complete_callback(task_usb_tx_completed);
-    xTaskCreate(task_usb, "USB_TASK", TASK_DEBUG_STACK, NULL, TASK_USB_PRIORITY, NULL);
+    configASSERT(xTaskCreate(task_usb, "USB_TASK", TASK_USB_STACK, NULL, TASK_USB_PRIORITY, NULL) ==
+                 pdPASS);
 }
 
 static void task_usb_rx(const uint8_t* data, size_t length) {
@@ -52,7 +55,9 @@ static void task_usb_send(const uint8_t* data, size_t length) {
     if (!platform_usb_transmit(data, length)) {
         return;
     }
-    (void)xSemaphoreTake(tx_done, portMAX_DELAY);
+    if (xSemaphoreTake(tx_done, pdMS_TO_TICKS(USB_TRANSMIT_TIMEOUT_MS)) == pdFALSE) {
+        platform_usb_abort_transmission();
+    }
 }
 
 static void task_usb_handle_command(const frame_t* frame) {
@@ -61,7 +66,7 @@ static void task_usb_handle_command(const frame_t* frame) {
     }
     switch (frame->command_type) {
         case APP_COMMAND_GET_MEASUREMENTS: {
-            QueueSetHandle_t queue = task_diagnostics_get_measurement_queue();
+            QueueHandle_t queue = task_diagnostics_get_measurement_queue();
             task_diagnostics_measurement_frame_t measurement = {0};
             if ((queue == NULL) || (xQueuePeek(queue, &measurement, 0) != pdTRUE)) {
                 return;
@@ -76,6 +81,7 @@ static void task_usb_handle_command(const frame_t* frame) {
                 return;
             }
             task_usb_send(data, encoded);
+            break;
         }
         case APP_COMMAND_SET_LED: {
             if (frame->length != 2U) {
@@ -86,9 +92,7 @@ static void task_usb_handle_command(const frame_t* frame) {
             if ((led < 1U) || (led > 3U) || (percent > 100U)) {
                 break;
             }
-            const uint16_t pulse =
-                (uint16_t)((uint32_t)percent * (uint32_t)PLATFORM_PWM_MAX_PULSE / (uint32_t)100U);
-            task_led_set_pulse((platform_pwm_channel_t)(led - 1U), pulse);
+            task_led_set_brightness_percent((platform_pwm_channel_t)(led - 1), percent);
 
             uint8_t data[5U + 2U];
             const size_t encoded = frame_encode(data, APP_COMMAND_SET_LED, frame->payload, 2U);
@@ -100,14 +104,14 @@ static void task_usb_handle_command(const frame_t* frame) {
         case APP_COMMAND_GET_LED: {
             uint8_t payload[3];
             for (uint8_t i = 0U; i < 3U; ++i) {
-                const uint16_t pulse = task_led_get_pulse((platform_pwm_channel_t)i);
-                payload[i] = (uint8_t)(((uint32_t)pulse * 100U) / (uint32_t)PLATFORM_PWM_MAX_PULSE);
+                payload[i] = task_led_get_brightness_percent((platform_pwm_channel_t)i);
             }
             uint8_t data[5U + 3U];
             const size_t encoded = frame_encode(data, APP_COMMAND_GET_LED, payload, 3U);
             if (encoded != 0U) {
                 task_usb_send(data, encoded);
             }
+            break;
         }
 
         default:
@@ -116,7 +120,8 @@ static void task_usb_handle_command(const frame_t* frame) {
 }
 
 static void task_usb(void* pvParameters) {
-    debugger_log_info(tag, "init completed.");
+    debugger_log_info(tag, "init completed");
+
     while (1) {
         frame_t frame;
         while (frame_parser_get(&parser, &frame)) {

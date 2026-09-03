@@ -13,10 +13,10 @@ static platform_uart_receive_callback_t rx_callback;
 static platform_uart_transmit_complete_callback_t tx_complete_callback;
 
 bool platform_uart_transmit(const uint8_t* data, size_t length) {
-    if ((data == NULL) || (length == 0U)) {
+    if ((data == NULL) || (length == 0U) || (length > UINT16_MAX)) {
         return false;
     }
-    return HAL_UART_Transmit_DMA(platform_uart, (uint8_t*)data, (uint8_t)length) == HAL_OK;
+    return HAL_UART_Transmit_DMA(platform_uart, (uint8_t*)data, (uint16_t)length) == HAL_OK;
 }
 
 void platform_uart_set_receive_callback(platform_uart_receive_callback_t receive_callback) {
@@ -34,7 +34,11 @@ void platform_uart_set_transmit_complete_callback(
     tx_complete_callback = transmit_callback;
 }
 
-void platform_uart_init() {
+void platform_uart_abort_transmission(void) {
+    HAL_UART_AbortTransmit(platform_uart);
+}
+
+void platform_uart_init(void) {
     rx_position = 0;
 
     HAL_UARTEx_ReceiveToIdle_DMA(platform_uart, platform_uart_rx_buffer,
@@ -80,8 +84,13 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef* huart) {
     }
 
     __HAL_UART_CLEAR_OREFLAG(huart);
-
     rx_position = 0;
+
+    platform_uart_abort_transmission();
+
+    if (tx_complete_callback != NULL) {
+        tx_complete_callback();
+    }
 
     HAL_UARTEx_ReceiveToIdle_DMA(platform_uart, platform_uart_rx_buffer,
                                  sizeof(platform_uart_rx_buffer));

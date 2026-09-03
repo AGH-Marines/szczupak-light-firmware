@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 
-#define PLATFORM_PWM_MAX_PULSE      9999U
+#define PLATFORM_PWM_MAX_PULSE      7999U
 #define PLATFORM_PWM_CHANNELS_COUNT 3U
 
 typedef enum platform_pwm_channel_t {

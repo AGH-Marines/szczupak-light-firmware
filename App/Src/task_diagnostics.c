@@ -47,8 +47,8 @@ void task_diagnostics_init() {
     measurement_queue_handle = xQueueCreate(1, sizeof(task_diagnostics_measurement_frame_t));
     configASSERT(measurement_queue_handle != NULL);
 
-    xTaskCreate(diagnostics_task, "diag_task", TASK_DIAGNOSTICS_STACK, NULL,
-                TASK_DIAGNOSTICS_PRIORITY, NULL);
+    configASSERT(xTaskCreate(diagnostics_task, "diag_task", TASK_DIAGNOSTICS_STACK, NULL,
+                             TASK_DIAGNOSTICS_PRIORITY, NULL) == pdPASS);
 }
 
 static void task_diagnostics_adc_notify() {
@@ -61,6 +61,7 @@ static void diagnostics_task(void* pvParameters) {
     diagnostics_task_handle = xTaskGetCurrentTaskHandle();
     platform_adc_set_callback(task_diagnostics_adc_notify);
     platform_adc_init();
+
     debugger_log_info(tag, "init completed");
 
     while (1) {
