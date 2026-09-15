@@ -12,6 +12,7 @@ static void test_command_encode_decode(void) {
         .led2_percent = 0,
         .led3_percent = 25,
         .enable = true,
+        .fault_reset = false,
     };
 
     can_frame_t frame = {0};
@@ -27,6 +28,7 @@ static void test_command_encode_decode(void) {
     TEST_ASSERT_EQUAL_UINT8(in.led2_percent, out.led2_percent);
     TEST_ASSERT_EQUAL_UINT8(in.led3_percent, out.led3_percent);
     TEST_ASSERT_TRUE(out.enable);
+    TEST_ASSERT_FALSE(out.fault_reset);
 }
 
 static void test_command_null(void) {
@@ -49,6 +51,7 @@ static void test_command_ranges(void) {
         .led2_percent = 0,
         .led3_percent = 25,
         .enable = true,
+        .fault_reset = false,
     };
     can_frame_t frame = {0};
 

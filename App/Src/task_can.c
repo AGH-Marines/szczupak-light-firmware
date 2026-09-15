@@ -19,6 +19,7 @@
 static const char tag[] = "CAN";
 static QueueHandle_t receive_queue;
 static TaskHandle_t task_can_handle;
+static bool fault_reset_z1 = false;
 
 static void task_can(void* pvParameters);
 static void task_can_receive_callback(const can_frame_t* frame);
@@ -61,47 +62,78 @@ static void task_can_handle_frame(const can_frame_t* frame) {
     };
 
     for (uint8_t i = 0; i < 3; ++i) {
-        uint8_t percent = cmd.enable ? led_percent[i] : 0;
+        uint8_t percent = led_percent[i];
         task_led_set_brightness_percent((platform_pwm_channel_t)i, percent);
     }
+    task_led_set_enabled(cmd.enable);
+
+    if (cmd.fault_reset == true && fault_reset_z1 == false) {
+        task_diagnostics_clear_faults();
+    }
+    fault_reset_z1 = cmd.fault_reset;
 }
 
 static void task_can_send_status() {
-    QueueHandle_t queue = task_diagnostics_get_measurement_queue();
+    QueueHandle_t measurement_queue = task_diagnostics_get_measurement_queue();
+    QueueHandle_t fault_queue = task_diagnostics_get_fault_queue();
+
     task_diagnostics_measurement_frame_t measurement = {0};
-    if ((queue == NULL) || (xQueuePeek(queue, &measurement, 0) != pdTRUE)) {
+    if ((measurement_queue == NULL) || (fault_queue == NULL)) {
         return;
     }
-    uint8_t led_percent[3] = {0};
-    for (uint8_t i = 0; i < 3; ++i) {
-        led_percent[i] = task_led_get_brightness_percent((platform_pwm_channel_t)i);
-    }
-    bool enable =
-        ((led_percent[0] > 0) || (led_percent[1] > 0) || (led_percent[2] > 0)) ? true : false;
-    can_power_status_t power_status = {
-        .usb_voltage_mv = measurement.voltage_usb,
-        .power_voltage_mv = measurement.voltage_12v,
-        .led1_percent = led_percent[0],
-        .led2_percent = led_percent[1],
-        .led3_percent = led_percent[2],
-        .enable = enable,
-    };
-    can_current_status_t current_status = {
-        .led1_current_ma = measurement.current_led1,
-        .led2_current_ma = measurement.current_led2,
-        .led3_current_ma = measurement.current_led3,
-    };
-    can_frame_t power_frame = {0};
-    can_frame_t current_frame = {0};
+    if (xQueuePeek(measurement_queue, &measurement, 0) == pdTRUE) {
+        uint8_t led_percent[3] = {0};
+        for (uint8_t i = 0; i < 3; ++i) {
+            led_percent[i] = task_led_get_brightness_percent((platform_pwm_channel_t)i);
+        }
 
-    if (can_encode_power_status(&power_status, &power_frame)) {
-        if (!platform_can_transmit(&power_frame)) {
-            debugger_log_warning(tag, "could not transmit power status frame.");
+        bool enable = task_led_get_enabled();
+        can_power_status_t power_status = {
+            .usb_voltage_mv = measurement.voltage_usb,
+            .power_voltage_mv = measurement.voltage_12v,
+            .led1_percent = led_percent[0],
+            .led2_percent = led_percent[1],
+            .led3_percent = led_percent[2],
+            .enable = enable,
+        };
+        can_current_status_t current_status = {
+            .led1_current_ma = measurement.current_led1,
+            .led2_current_ma = measurement.current_led2,
+            .led3_current_ma = measurement.current_led3,
+        };
+        can_frame_t power_frame = {0};
+        can_frame_t current_frame = {0};
+
+        if (can_encode_power_status(&power_status, &power_frame)) {
+            if (!platform_can_transmit(&power_frame)) {
+                debugger_log_warning(tag, "could not transmit power status frame.");
+            }
+        }
+        if (can_encode_current_status(&current_status, &current_frame)) {
+            if (!platform_can_transmit(&current_frame)) {
+                debugger_log_warning(tag, "could not transmit current status frame.");
+            }
         }
     }
-    if (can_encode_current_status(&current_status, &current_frame)) {
-        if (!platform_can_transmit(&current_frame)) {
-            debugger_log_warning(tag, "could not transmit current status frame.");
+    task_diagnostics_fault_frame_t fault_frame = {0};
+    if (xQueuePeek(fault_queue, &fault_frame, 0) == pdTRUE) {
+
+        can_fault_status_t fault_status = {
+            .led1_overcurrent = fault_frame.led1_overcurrent,
+            .led2_overcurrent = fault_frame.led2_overcurrent,
+            .led3_overcurrent = fault_frame.led3_overcurrent,
+            .led1_no_load = fault_frame.led1_noload,
+            .led2_no_load = fault_frame.led2_noload,
+            .led3_no_load = fault_frame.led3_noload,
+            .usb_undervoltage = fault_frame.usb_undervoltage,
+            .power_undervoltage = fault_frame.power_undervoltage,
+        };
+        can_frame_t fault_can_frame = {0};
+
+        if (can_encode_fault_status(&fault_status, &fault_can_frame)) {
+            if (!platform_can_transmit(&fault_can_frame)) {
+                debugger_log_warning(tag, "could not transmit fault status frame.");
+            }
         }
     }
 }

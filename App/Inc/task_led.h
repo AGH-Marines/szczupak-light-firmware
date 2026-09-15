@@ -8,6 +8,8 @@
 #ifndef TASK_LED_H
 #define TASK_LED_H
 
+#include <stdbool.h>
+
 #include "platform_pwm.h"
 
 typedef struct task_led_command_t {
@@ -19,5 +21,8 @@ void task_led_init(void);
 void task_led_set_brightness_percent(platform_pwm_channel_t channel, uint8_t percent);
 uint8_t task_led_get_brightness_percent(platform_pwm_channel_t channel);
 uint16_t task_led_get_brightness_pulse(platform_pwm_channel_t channel);
+bool task_led_channel_ready(platform_pwm_channel_t channel);
+void task_led_set_enabled(bool enable);
+bool task_led_get_enabled();
 
 #endif /* TASK_LED_H */

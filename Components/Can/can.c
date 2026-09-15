@@ -16,9 +16,10 @@ bool can_encode_command(const can_command_t* cmd, can_frame_t* frame) {
         .led2_setpoint = cmd->led2_percent,
         .led3_setpoint = cmd->led3_percent,
         .light_enable = cmd->enable ? 1U : 0U,
+        .fault_reset = cmd->fault_reset ? 1U : 0U,
     };
 
-    if (can_generated_light_command_pack(frame->data, &msg, sizeof(frame->data)) < 0) {
+    if (can_generated_light_command_pack(frame->data, &msg, sizeof(frame->data)) < 0U) {
         return false;
     }
 
@@ -38,14 +39,15 @@ bool can_decode_command(const can_frame_t* frame, can_command_t* cmd) {
     }
 
     struct can_generated_light_command_t msg;
-    if (can_generated_light_command_unpack(&msg, frame->data, frame->dlc) != 0) {
+    if (can_generated_light_command_unpack(&msg, frame->data, frame->dlc) != 0U) {
         return false;
     }
 
     if (!can_generated_light_command_led1_setpoint_is_in_range(msg.led1_setpoint) ||
         !can_generated_light_command_led2_setpoint_is_in_range(msg.led2_setpoint) ||
         !can_generated_light_command_led3_setpoint_is_in_range(msg.led3_setpoint) ||
-        !can_generated_light_command_light_enable_is_in_range(msg.light_enable)) {
+        !can_generated_light_command_light_enable_is_in_range(msg.light_enable) ||
+        !can_generated_light_command_fault_reset_is_in_range(msg.fault_reset)) {
         return false;
     }
 
@@ -53,6 +55,7 @@ bool can_decode_command(const can_frame_t* frame, can_command_t* cmd) {
     cmd->led2_percent = msg.led2_setpoint;
     cmd->led3_percent = msg.led3_setpoint;
     cmd->enable = (msg.light_enable != 0U);
+    cmd->fault_reset = (msg.fault_reset != 0U);
     return true;
 }
 

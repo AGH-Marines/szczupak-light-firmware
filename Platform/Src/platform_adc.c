@@ -6,12 +6,12 @@
 #include "tim.h"
 
 #define PLATFORM_ADC_CHANNEL_COUNT      5U
-#define PLATFORM_ADC_SEQUENCES_COUNT    16U
+#define PLATFORM_ADC_SEQUENCES_COUNT    25U
 #define PLATFORM_ADC_BUFFER_HALF_LENGTH (PLATFORM_ADC_CHANNEL_COUNT * PLATFORM_ADC_SEQUENCES_COUNT)
 #define PLATFORM_ADC_BUFFER_LENGTH      (PLATFORM_ADC_BUFFER_HALF_LENGTH * 2U)
 
 static ADC_HandleTypeDef* platform_adc = &hadc1;
-static TIM_HandleTypeDef* platform_adc_trigger = &htim6;
+static TIM_HandleTypeDef* platform_adc_trigger = &htim2;
 
 static platform_adc_sample_t latest_sample;
 static uint16_t platform_adc_buffer[PLATFORM_ADC_BUFFER_LENGTH];

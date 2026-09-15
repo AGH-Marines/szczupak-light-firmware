@@ -22,6 +22,7 @@ typedef struct can_command_t {
     uint8_t led2_percent;
     uint8_t led3_percent;
     bool enable;
+    bool fault_reset;
 } can_command_t;
 
 typedef struct can_power_status_t {

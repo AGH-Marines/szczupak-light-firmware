@@ -21,9 +21,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#if DEBUGGER_ENABLED
 static const char tag[] = "APP";
-#endif /* DEBUGGER_ENABLED */
 
 static void app_task(void* pvParameters);
 
