@@ -5,8 +5,9 @@ compile_commands.json
 .mxproject
 MXTmpFiles/
 
-.vscode/.browse.VC.db*
-.vscode/ipch/
+.vscode/
+create_component.sh
+
 *.elf
 *.hex
 *.bin
