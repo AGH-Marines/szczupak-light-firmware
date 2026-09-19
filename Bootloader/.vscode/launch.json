@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "STM32: Debug",
+            "type": "cortex-debug",
+            "request": "launch",
+
+            "cwd": "${workspaceFolder}",
+            "executable": "${command:cmake.getLaunchTargetPath}",
+
+            "servertype": "openocd",
+            "serverpath": "openocd",
+            "gdbPath": "gdb-multiarch",
+
+            "configFiles": [
+                "${command:cmake.buildDirectory}/openocd.cfg"
+            ],
+
+            "preLaunchTask": "STM32: build",
+            "runToEntryPoint": "main",
+            "rtos": "auto"
+        }
+    ]
+}

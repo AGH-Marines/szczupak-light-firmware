@@ -39,6 +39,10 @@ if(BUILD_FIRMWARE)
     add_executable(${PROJECT_NAME})
     set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 
+    add_compile_definitions(
+        USER_VECT_TAB_ADDRESS
+        VECT_TAB_OFFSET=0x00004000U
+    )
     add_subdirectory(cmake/stm32cubemx)
     include(Config/project-config.cmake)
 

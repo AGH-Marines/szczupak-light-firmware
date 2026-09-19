@@ -1,0 +1,10 @@
+source [find @OPENOCD_INTERFACE@]
+
+cmsis_dap_vid_pid 0xc251 0xf001
+cmsis_dap_backend auto
+
+transport select swd
+
+source [find @OPENOCD_TARGET@]
+
+adapter speed @OPENOCD_SPEED_KHZ@
