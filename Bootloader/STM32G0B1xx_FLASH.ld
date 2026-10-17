@@ -52,11 +52,14 @@
 /* Entry Point */
 ENTRY(Reset_Handler)
 
+INCLUDE memory_layout.ld
+
+
 /* Specify the memory areas */
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 144K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 16K
+FLASH (rx)      : ORIGIN = BOOT_FLASH_START, LENGTH = BOOT_FLASH_SIZE
 }
 
 /* Highest address of the user mode stack */

@@ -11,5 +11,6 @@
 #include <stdint.h>
 
 void platform_delay(uint32_t delay);
+uint32_t platform_get_time_ms();
 
 #endif /* PLATFORM_H */

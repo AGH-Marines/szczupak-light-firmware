@@ -1,0 +1,329 @@
+#include <string.h>
+
+#include "app.h"
+#include "platform_led.h"
+#include "platform_memory.h"
+#include "platform_boot.h"
+#include "platform_can.h"
+#include "platform.h"
+#include "can.h"
+
+#define CAN_INITIAL_WAIT_MS  1000U
+#define CAN_HEADER_WAIT_MS   20000U
+#define CAN_TRANSMIT_WAIT_MS 100U
+
+#define LED_NORMAL_BOOT_HALF_PERIOD_MS 200U
+#define LED_UPDATE_HALF_PERIOD_MS      100U
+
+#define LIGHT_BOOT_NODE_ID 0U
+#define PROTOCOL_VERSION   1U
+
+#define SEGMENT_FRAME_SIZE  7U
+#define SEGMENT_FRAME_COUNT 32U
+#define SEGMENT_DATA_SIZE   (SEGMENT_FRAME_SIZE * SEGMENT_FRAME_COUNT)
+
+typedef enum boot_state_t {
+    BOOT_STATE_WAIT_UPDATE,
+    BOOT_STATE_WAIT_HEADER,
+    BOOT_STATE_WAIT_IMAGE,
+    BOOT_STATE_WAIT_FINISH,
+    BOOT_STATE_APP_START,
+} boot_state_t;
+
+typedef struct boot_header_t {
+    bool part0_received;
+    bool part1_received;
+    uint32_t image_size;
+    uint32_t image_crc;
+} boot_header_t;
+
+typedef enum boot_received_type_t {
+    BOOT_RECEIVED_TYPE_NOTHING,
+    BOOT_RECEIVED_TYPE_COMMAND,
+    BOOT_RECEIVED_TYPE_DATA,
+} boot_received_type_t;
+
+typedef struct boot_segment_t {
+    uint8_t data[SEGMENT_DATA_SIZE];
+    uint32_t received_bitmap;
+    uint16_t segment_index;
+    bool written;
+} boot_segment_t;
+
+static uint32_t state_enter_time;
+static uint32_t last_led_update;
+
+static boot_state_t boot_state;
+static boot_header_t header;
+static boot_segment_t segment;
+
+static void boot_state_update(void);
+static void boot_status_send(can_boot_status_t status);
+
+void app_init(void) {
+
+    platform_can_init();
+
+    last_led_update = platform_get_time_ms();
+    state_enter_time = platform_get_time_ms();
+
+    platform_led_fault_set(false);
+    platform_led_status_set(false);
+
+    boot_state = BOOT_STATE_WAIT_UPDATE;
+    if (platform_boot_request_get()) {
+        platform_boot_request_clear();
+        state_enter_time = platform_get_time_ms();
+        boot_state = BOOT_STATE_WAIT_HEADER;
+        boot_status_send((can_boot_status_t){.type = CAN_BOOT_STATUS_READY});
+    }
+}
+
+void app_update(void) {
+    boot_state_update();
+}
+
+static void boot_state_update(void) {
+    uint32_t now = platform_get_time_ms();
+    can_frame_t frame = {0};
+    can_boot_command_t command = {0};
+    can_boot_data_t data = {0};
+
+    boot_received_type_t received_type = BOOT_RECEIVED_TYPE_NOTHING;
+    if (platform_can_receive(&frame)) {
+        if (can_decode_boot_command(&frame, &command)) {
+            if ((command.target_mask & (1U << LIGHT_BOOT_NODE_ID)) != 0U) {
+                received_type = BOOT_RECEIVED_TYPE_COMMAND;
+            }
+        } else if (can_decode_boot_data(&frame, &data)) {
+            received_type = BOOT_RECEIVED_TYPE_DATA;
+        }
+    }
+
+    switch (boot_state) {
+        case BOOT_STATE_WAIT_UPDATE: {
+            if (received_type == BOOT_RECEIVED_TYPE_COMMAND) {
+                if (command.type == CAN_BOOT_COMMAND_ENTER_UPDATE) {
+                    header = (boot_header_t){0};
+                    state_enter_time = now;
+                    boot_state = BOOT_STATE_WAIT_HEADER;
+                    boot_status_send((can_boot_status_t){.type = CAN_BOOT_STATUS_READY});
+                    break;
+                }
+            }
+            if ((now - state_enter_time) < CAN_INITIAL_WAIT_MS) {
+                break;
+            }
+            if (platform_memory_app_valid()) {
+                state_enter_time = now;
+                boot_state = BOOT_STATE_APP_START;
+                break;
+            }
+            // Send invalid app info thru can
+            break;
+        }
+        case BOOT_STATE_WAIT_HEADER: {
+            if (received_type == BOOT_RECEIVED_TYPE_COMMAND) {
+                if (command.type == CAN_BOOT_COMMAND_ENTER_UPDATE) {
+                    boot_status_send((can_boot_status_t){.type = CAN_BOOT_STATUS_READY});
+                    state_enter_time = now;
+                    break;
+                } else if (command.type == CAN_BOOT_COMMAND_HEADER) {
+                    if (command.version != PROTOCOL_VERSION) {
+                        header = (boot_header_t){0};
+                        state_enter_time = now;
+                        boot_status_send(
+                            (can_boot_status_t){.type = CAN_BOOT_STATUS_HEADER,
+                                                .header_result = CAN_BOOT_HEADER_REJECTED});
+                        break;
+                    }
+                    if (command.part == 0) {
+                        header.image_size = command.value;
+                        header.part0_received = true;
+                    } else if (command.part == 1) {
+                        header.image_crc = command.value;
+                        header.part1_received = true;
+                    }
+                    if (header.part0_received && header.part1_received) {
+                        if (header.image_size > 0 &&
+                            header.image_size <= platform_memory_app_size()) {
+                            if (platform_memory_metadata_clear() &&
+                                platform_memory_app_clear(header.image_size)) {
+                                segment = (boot_segment_t){0};
+                                state_enter_time = now;
+                                boot_state = BOOT_STATE_WAIT_IMAGE;
+
+                                boot_status_send(
+                                    (can_boot_status_t){.type = CAN_BOOT_STATUS_HEADER,
+                                                        .header_result = CAN_BOOT_HEADER_OK});
+
+                            } else {
+                                header = (boot_header_t){0};
+                                state_enter_time = now;
+                                boot_status_send(
+                                    (can_boot_status_t){.type = CAN_BOOT_STATUS_ERROR,
+                                                        .error_code = CAN_BOOT_ERROR_FLASH});
+                            }
+                            break;
+                        } else {
+                            header = (boot_header_t){0};
+                            state_enter_time = now;
+                            boot_status_send(
+                                (can_boot_status_t){.type = CAN_BOOT_STATUS_HEADER,
+                                                    .header_result = CAN_BOOT_HEADER_REJECTED});
+                            break;
+                        }
+                    }
+                }
+            }
+            if ((now - state_enter_time) >= CAN_HEADER_WAIT_MS) {
+                if (platform_memory_app_valid()) {
+                    state_enter_time = now;
+                    boot_state = BOOT_STATE_APP_START;
+                    break;
+                }
+                state_enter_time = now;
+                boot_state = BOOT_STATE_WAIT_UPDATE;
+            }
+            break;
+        }
+
+        case BOOT_STATE_WAIT_IMAGE: {
+            if (received_type == BOOT_RECEIVED_TYPE_DATA) {
+                if (data.frame_index >= SEGMENT_FRAME_COUNT) {
+                    break;
+                }
+                if (segment.written) {
+                    segment.segment_index++;
+                    segment.received_bitmap = 0U;
+                    segment.written = false;
+                }
+                uint32_t offset = data.frame_index * SEGMENT_FRAME_SIZE;
+                memcpy(segment.data + offset, data.data, SEGMENT_FRAME_SIZE);
+                segment.received_bitmap |= (1U << data.frame_index);
+            } else if (received_type == BOOT_RECEIVED_TYPE_COMMAND) {
+                if (command.type == CAN_BOOT_COMMAND_SEGMENT_CHECK) {
+                    if (command.segment_index == segment.segment_index) {
+
+                        uint32_t segment_start_offset =
+                            segment.segment_index * SEGMENT_DATA_SIZE;
+                        uint32_t remaining = header.image_size - segment_start_offset;
+                        uint32_t segment_size = (remaining < SEGMENT_DATA_SIZE)
+                                                    ? remaining
+                                                    : SEGMENT_DATA_SIZE;
+
+                        uint8_t required_frames = (segment_size + (SEGMENT_FRAME_SIZE - 1U)) /
+                                                  SEGMENT_FRAME_SIZE;
+                        uint32_t expected_bitmap = 0xFFFFFFFFU;
+                        if (required_frames < 32U) {
+                            expected_bitmap = (1U << required_frames) - 1U;
+                        }
+                        bool segment_completed = (segment.received_bitmap == expected_bitmap);
+                        if (!segment_completed) {
+                            boot_status_send(
+                                (can_boot_status_t){.type = CAN_BOOT_STATUS_SEGMENT,
+                                                    .segment_index = segment.segment_index,
+                                                    .received_bitmap = segment.received_bitmap});
+                            break;
+                        }
+                        if (!segment.written) {
+                            if (!platform_memory_app_write(segment_start_offset, segment.data,
+                                                           segment_size)) {
+                                header = (boot_header_t){0};
+                                state_enter_time = now;
+                                boot_state = BOOT_STATE_WAIT_HEADER;
+                                boot_status_send(
+                                    (can_boot_status_t){.type = CAN_BOOT_STATUS_ERROR,
+                                                        .error_code = CAN_BOOT_ERROR_FLASH});
+
+                                break;
+                            }
+                            if (segment_start_offset + segment_size == header.image_size) {
+                                state_enter_time = now;
+                                boot_state = BOOT_STATE_WAIT_FINISH;
+                            }
+                            segment.written = true;
+                        }
+                        boot_status_send(
+                            (can_boot_status_t){.type = CAN_BOOT_STATUS_SEGMENT,
+                                                .segment_index = segment.segment_index,
+                                                .received_bitmap = segment.received_bitmap});
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+
+        case BOOT_STATE_WAIT_FINISH: {
+            if (received_type == BOOT_RECEIVED_TYPE_COMMAND) {
+                if (command.type == CAN_BOOT_COMMAND_SEGMENT_CHECK) {
+                    if (command.segment_index == segment.segment_index) {
+                        boot_status_send(
+                            (can_boot_status_t){.type = CAN_BOOT_STATUS_SEGMENT,
+                                                .segment_index = segment.segment_index,
+                                                .received_bitmap = segment.received_bitmap});
+                        break;
+                    }
+                } else if (command.type == CAN_BOOT_COMMAND_FINISH) {
+                    uint32_t app_crc = 0;
+                    if (!platform_memory_calculate_app_crc(header.image_size, &app_crc)) {
+                        boot_status_send(
+                            (can_boot_status_t){.type = CAN_BOOT_STATUS_FINISH,
+                                                .finish_result = CAN_BOOT_FINISH_FLASH_ERROR});
+                        header = (boot_header_t){0};
+                        state_enter_time = now;
+                        boot_state = BOOT_STATE_WAIT_HEADER;
+                        break;
+                    }
+                    if (header.image_crc != app_crc) {
+                        boot_status_send(
+                            (can_boot_status_t){.type = CAN_BOOT_STATUS_FINISH,
+                                                .finish_result = CAN_BOOT_FINISH_CRC_MISMATCH});
+                        header = (boot_header_t){0};
+                        state_enter_time = now;
+                        boot_state = BOOT_STATE_WAIT_HEADER;
+                        break;
+                    }
+
+                    if (!platform_memory_metadata_save(header.image_size, header.image_crc)) {
+                        boot_status_send(
+                            (can_boot_status_t){.type = CAN_BOOT_STATUS_FINISH,
+                                                .finish_result = CAN_BOOT_FINISH_FLASH_ERROR});
+                        header = (boot_header_t){0};
+                        state_enter_time = now;
+                        boot_state = BOOT_STATE_WAIT_HEADER;
+                        break;
+                    }
+                    boot_status_send((can_boot_status_t){.type = CAN_BOOT_STATUS_FINISH,
+                                                         .finish_result = CAN_BOOT_FINISH_OK});
+                    state_enter_time = now;
+                    boot_state = BOOT_STATE_APP_START;
+                    break;
+                }
+            }
+            break;
+        }
+        case BOOT_STATE_APP_START: {
+            if (platform_can_tx_fifo_empty()) {
+                platform_memory_app_start();
+            }
+            if ((now - state_enter_time) >= CAN_TRANSMIT_WAIT_MS) {
+                platform_memory_app_start();
+            }
+
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void boot_status_send(can_boot_status_t status) {
+    status.node_id = LIGHT_BOOT_NODE_ID;
+    can_frame_t frame = {0};
+
+    if (can_encode_boot_status(&status, &frame)) {
+        platform_can_transmit(&frame);
+    }
+}

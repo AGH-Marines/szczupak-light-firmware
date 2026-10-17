@@ -3,11 +3,11 @@
 #include "gpio.h"
 
 void platform_led_status_set(bool state) {
-    HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, (state ? RESET : SET));
+    HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, (state ? SET : RESET));
 }
 
 void platform_led_fault_set(bool state) {
-    HAL_GPIO_WritePin(LED_FAULT_GPIO_Port, LED_FAULT_Pin, (state ? RESET : SET));
+    HAL_GPIO_WritePin(LED_FAULT_GPIO_Port, LED_FAULT_Pin, (state ? SET : RESET));
 }
 
 void platform_led_fault_toggle() {

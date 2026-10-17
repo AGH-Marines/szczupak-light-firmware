@@ -2,12 +2,15 @@
 #include "fdcan.h"
 #include "platform_can.h"
 
-#define PLATFORM_CAN_FILTERID1 0x100U
-#define PLATFORM_CAN_FILTERID2 0x7FFU
+#define PLATFORM_CAN_APP_FILTERID1 0x100U
+#define PLATFORM_CAN_APP_FILTERID2 0x7FFU
 
-FDCAN_HandleTypeDef* platform_can = &hfdcan1;
-platform_can_receive_callback_t platform_can_receive_callback;
-platform_can_reset_callback_t platform_can_reset_callback;
+#define PLATFORM_CAN_BOOT_FILTERID1 0x600U
+#define PLATFORM_CAN_BOOT_FILTERID2 0x7FFU
+
+static FDCAN_HandleTypeDef* platform_can = &hfdcan1;
+static platform_can_receive_callback_t platform_can_receive_callback;
+static platform_can_reset_callback_t platform_can_reset_callback;
 
 static const uint32_t dlc_map[9] = {
     FDCAN_DLC_BYTES_0, FDCAN_DLC_BYTES_1, FDCAN_DLC_BYTES_2, FDCAN_DLC_BYTES_3, FDCAN_DLC_BYTES_4,
@@ -15,16 +18,25 @@ static const uint32_t dlc_map[9] = {
 };
 
 void platform_can_init(void) {
-    FDCAN_FilterTypeDef filter = {
+    FDCAN_FilterTypeDef app_filter = {
         .IdType = FDCAN_STANDARD_ID,
         .FilterIndex = 0,
         .FilterType = FDCAN_FILTER_MASK,
         .FilterConfig = FDCAN_FILTER_TO_RXFIFO0,
-        .FilterID1 = PLATFORM_CAN_FILTERID1,
-        .FilterID2 = PLATFORM_CAN_FILTERID2,
+        .FilterID1 = PLATFORM_CAN_APP_FILTERID1,
+        .FilterID2 = PLATFORM_CAN_APP_FILTERID2,
+    };
+    FDCAN_FilterTypeDef boot_filter = {
+        .IdType = FDCAN_STANDARD_ID,
+        .FilterIndex = 1,
+        .FilterType = FDCAN_FILTER_MASK,
+        .FilterConfig = FDCAN_FILTER_TO_RXFIFO0,
+        .FilterID1 = PLATFORM_CAN_BOOT_FILTERID1,
+        .FilterID2 = PLATFORM_CAN_BOOT_FILTERID2,
     };
 
-    HAL_FDCAN_ConfigFilter(platform_can, &filter);
+    HAL_FDCAN_ConfigFilter(platform_can, &app_filter);
+    HAL_FDCAN_ConfigFilter(platform_can, &boot_filter);
 
     HAL_FDCAN_ConfigGlobalFilter(platform_can, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
                                  FDCAN_REJECT_REMOTE);
@@ -84,13 +96,17 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
     uint8_t data[8];
 
     while (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &receive_header, data) == HAL_OK) {
+        uint8_t dlc = (uint8_t)receive_header.DataLength;
+        if (dlc > 8U) {
+            continue;
+        }
         can_frame_t frame = {
             .id = receive_header.Identifier,
-            .dlc = (uint8_t)receive_header.DataLength, /* Classic 0–8: code == długość */
+            .dlc = dlc,
         };
-        memcpy(frame.data, data, 8);
+        memcpy(frame.data, data, dlc);
         if (platform_can_receive_callback != NULL) {
-            platform_can_receive_callback(&frame); /* ISR — krótko; kolejka do taska */
+            platform_can_receive_callback(&frame);
         }
     }
 }
