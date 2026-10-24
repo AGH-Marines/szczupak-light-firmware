@@ -31,13 +31,23 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(unity)
 endif()
 
+if(BUILD_FIRMWARE)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+endif()
+
 add_subdirectory(Components)
+
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE)
 
 if(BUILD_FIRMWARE)
     enable_language(ASM)
 
     add_executable(${PROJECT_NAME})
-    set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+
+    set_property(
+        TARGET ${PROJECT_NAME}
+        PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
+    )
 
     add_compile_definitions(
         USER_VECT_TAB_ADDRESS
@@ -68,6 +78,25 @@ if(BUILD_FIRMWARE)
         stm32cubemx
         project_components
     )
+
+    set(FIRMWARE_BIN "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.bin")
+
+    add_custom_command(
+        OUTPUT ${FIRMWARE_BIN}
+        COMMAND ${CMAKE_OBJCOPY}
+            -O binary
+            $<TARGET_FILE:${PROJECT_NAME}>
+            ${FIRMWARE_BIN}
+        DEPENDS ${PROJECT_NAME}
+        COMMENT "Generating ${PROJECT_NAME}.bin"
+        VERBATIM
+    )
+
+    add_custom_target(
+        firmware_bin ALL
+        DEPENDS ${FIRMWARE_BIN}
+    )
+
     if(OPENOCD_TARGET STREQUAL "")
         message(FATAL_ERROR
             "OPENOCD_TARGET is empty. Set it in cmake/project-config.cmake.")

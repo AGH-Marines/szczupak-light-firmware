@@ -52,13 +52,15 @@
 /* Entry Point */
 ENTRY(Reset_Handler)
 
+INCLUDE memory_layout.ld
+
 /* Specify the memory areas */
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 144K
-FLASH (rx)      : ORIGIN = 0x8004000, LENGTH = 110K
+FLASH (rx)      : ORIGIN = APP_FLASH_START, LENGTH = APP_FLASH_SIZE
 }
-
+ 
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM) + LENGTH(RAM);    /* end of RAM */
 _sstack = _estack - _Min_Stack_Size;

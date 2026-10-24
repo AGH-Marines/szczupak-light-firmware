@@ -72,8 +72,8 @@ void app_can_receive() {
                 break;
             }
             case CAN_BOOT_COMMAND_HEADER: {
-                uint8_t command_part = command.payload[0];
-                uint8_t command_version = command.payload[1];
+                uint8_t command_part = command.header_part;
+                uint8_t command_version = command.protocol_version;
                 if (command_version != PROTOCOL_VERSION) {
                     if (!app_header.accepted) {
                         app_header = (app_can_header_t){0};
@@ -82,8 +82,7 @@ void app_can_receive() {
                         (can_boot_status_t){.type = CAN_BOOT_STATUS_HEADER_INVALID});
                     return;
                 }
-                uint32_t command_value = 0;
-                memcpy(&command_value, command.payload + 2U, sizeof(command_value));
+                uint32_t command_value = command.header_value;
 
                 if (app_header.accepted) {
                     if (command_part == 0U) {
@@ -160,8 +159,8 @@ void app_can_receive() {
             }
 
             case CAN_BOOT_COMMAND_SEGMENT_CHECK: {
-                uint16_t segment_index;
-                memcpy(&segment_index, command.payload, sizeof(segment_index));
+                uint16_t segment_index = command.segment_index;
+
                 if (app_segment.segment_index != segment_index) {
                     break;
                 }
@@ -261,10 +260,20 @@ void app_can_receive() {
                 }
                 break;
             }
-
             case CAN_BOOT_COMMAND_RESET: {
                 platform_boot_reset();
 
+                break;
+            }
+            case CAN_BOOT_COMMAND_STATUS_REQUEST: {
+                uint32_t error_code = platform_boot_error_get();
+                if (error_code != 0U) {
+                    app_can_send_status((can_boot_status_t){.type = CAN_BOOT_STATUS_APP_ERROR,
+                                                            .error_code = error_code});
+
+                    break;
+                }
+                app_can_send_status((can_boot_status_t){.type = CAN_BOOT_STATUS_BOOTLOADER});
                 break;
             }
             default:
@@ -286,10 +295,9 @@ void app_can_receive() {
 }
 
 static void send_segment_status(uint16_t segment_index, uint32_t segment_bitmap) {
-    can_boot_status_t status = {.type = CAN_BOOT_STATUS_SEGMENT};
-
-    memcpy(&status.payload[0], &segment_index, sizeof(segment_index));
-    memcpy(&status.payload[2], &segment_bitmap, sizeof(segment_bitmap));
+    can_boot_status_t status = {.type = CAN_BOOT_STATUS_SEGMENT,
+                                .segment_index = segment_index,
+                                .received_bitmap = segment_bitmap};
 
     app_can_send_status(status);
 }

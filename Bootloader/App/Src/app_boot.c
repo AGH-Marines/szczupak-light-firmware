@@ -20,6 +20,7 @@ app_boot_result_t app_boot_init(uint32_t now) {
     header = (app_boot_header_t){0};
     state_update_time = now;
     led_update_time = now;
+
     boot_state = APP_BOOT_WAIT_UPDATE;
 
     platform_led_status_set(false);
@@ -51,13 +52,17 @@ boot_state_event_t app_boot_update(uint32_t now) {
                 platform_led_fault_toggle();
                 platform_led_status_toggle();
             }
-            if (now - state_update_time > APP_BOOT_INITIAL_WAIT_MS) {
-                state_update_time = now;
-                boot_state = APP_BOOT_APP_START;
+            if (now - state_update_time <= APP_BOOT_INITIAL_WAIT_MS) {
+                break;
+            }
+            if (platform_boot_error_get() != 0U) {
+                break;
             }
             if (!platform_memory_app_valid()) {
                 break;
             }
+            state_update_time = now;
+            boot_state = APP_BOOT_APP_START;
             break;
         }
         case APP_BOOT_WAIT_HEADER: {
@@ -175,6 +180,8 @@ app_boot_result_t app_boot_finish(uint32_t now) {
         boot_state = APP_BOOT_WAIT_HEADER;
         return APP_BOOT_RESULT_FLASH_ERROR;
     }
+    platform_boot_error_clear();
+
     state_update_time = now;
     boot_state = APP_BOOT_WAIT_RESET;
     return APP_BOOT_RESULT_SUCCESS;

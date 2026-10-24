@@ -45,7 +45,7 @@
 
 /* USER CODE BEGIN Includes */
 /* Section where include file can be added */
-void faults_assert_handle(void);
+void app_faults_assert(void);
 /* USER CODE END Includes */
 
 /* Ensure definitions are only used by the compiler, and not by the assembler. */
@@ -132,7 +132,7 @@ header file. */
 #define configASSERT(x)                                                                            \
     do {                                                                                           \
         if ((x) == 0) {                                                                            \
-            faults_assert_handle();                                                                \
+            app_faults_assert();                                                           \
         }                                                                                          \
     } while(0);                                                                                  
 /* USER CODE END 1 */

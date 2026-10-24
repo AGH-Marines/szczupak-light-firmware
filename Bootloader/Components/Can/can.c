@@ -11,24 +11,24 @@ bool can_decode_boot_command(const can_frame_t* frame, can_boot_command_t* comma
         return false;
     }
 
-    struct can_generated_light_boot_command_t generated_cmd;
+    struct can_generated_light_boot_command_t generated_cmd = {0};
 
     if (can_generated_light_boot_command_unpack(&generated_cmd, frame->data, frame->dlc) != 0) {
         return false;
     }
 
-    if (!can_generated_light_boot_command_type_is_in_range(generated_cmd.type)) {
+    if ((generated_cmd.type <= CAN_BOOT_COMMAND_INVALID) ||
+        !can_generated_light_boot_command_type_is_in_range(generated_cmd.type)) {
         return false;
     }
 
+    *command = (can_boot_command_t){0};
     command->type = generated_cmd.type;
     command->target_mask = generated_cmd.target_mask;
-    command->payload[0] = generated_cmd.payload0;
-    command->payload[1] = generated_cmd.payload1;
-    command->payload[2] = generated_cmd.payload2;
-    command->payload[3] = generated_cmd.payload3;
-    command->payload[4] = generated_cmd.payload4;
-    command->payload[5] = generated_cmd.payload5;
+    command->header_part = generated_cmd.header_part;
+    command->protocol_version = generated_cmd.protocol_version;
+    command->header_value = generated_cmd.header_value;
+    command->segment_index = generated_cmd.segment_index;
 
     return true;
 }
@@ -82,12 +82,9 @@ bool can_encode_boot_status(const can_boot_status_t* status, can_frame_t* frame)
 
     generated_status.device_id = status->device_id;
     generated_status.type = status->type;
-    generated_status.payload0 = status->payload[0];
-    generated_status.payload1 = status->payload[1];
-    generated_status.payload2 = status->payload[2];
-    generated_status.payload3 = status->payload[3];
-    generated_status.payload4 = status->payload[4];
-    generated_status.payload5 = status->payload[5];
+    generated_status.error_code = status->error_code;
+    generated_status.received_bitmap = status->received_bitmap;
+    generated_status.segment_index = status->segment_index;
 
     if (can_generated_light_boot_status_pack(frame->data, &generated_status, sizeof(frame->data)) <
         0) {

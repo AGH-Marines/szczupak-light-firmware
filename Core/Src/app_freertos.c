@@ -27,7 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "faults.h"
+#include "app_faults.h"
 
 /* USER CODE END Includes */
 
@@ -73,7 +73,7 @@ void vApplicationMallocFailedHook(void);
 
 /* USER CODE BEGIN 4 */
 void vApplicationStackOverflowHook(xTaskHandle xTask, signed char* pcTaskName) {
-    faults_handle(FAULT_STACK);
+    app_faults_fatal(APP_FAULT_STACK_OVERFLOW);
     /* Run time stack overflow checking is performed if
 configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
 called if a stack overflow is detected. */
@@ -82,7 +82,7 @@ called if a stack overflow is detected. */
 
 /* USER CODE BEGIN 5 */
 void vApplicationMallocFailedHook(void) {
-    faults_handle(FAULT_HEAP);
+    app_faults_fatal(APP_FAULT_MALLOC);
 
     /* vApplicationMallocFailedHook() will only be called if
     configUSE_MALLOC_FAILED_HOOK is set to 1 in FreeRTOSConfig.h. It is a hook

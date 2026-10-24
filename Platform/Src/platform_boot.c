@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #include "platform_boot.h"
 #include "stm32g0xx_hal.h"
 
@@ -28,4 +30,29 @@ void platform_boot_request_clear(void) {
 
 void platform_boot_reset(void) {
     NVIC_SystemReset();
+}
+
+void platform_boot_error_set(uint32_t error_code) {
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+
+    __HAL_RCC_RTCAPB_CLK_ENABLE();
+    TAMP->BKP1R = error_code;
+
+    HAL_PWR_DisableBkUpAccess();
+}
+
+uint32_t platform_boot_error_get(void) {
+    __HAL_RCC_RTCAPB_CLK_ENABLE();
+    return TAMP->BKP1R;
+}
+
+void platform_boot_error_clear(void) {
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+
+    __HAL_RCC_RTCAPB_CLK_ENABLE();
+    TAMP->BKP1R = 0U;
+
+    HAL_PWR_DisableBkUpAccess();
 }

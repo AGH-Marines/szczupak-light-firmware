@@ -8,6 +8,7 @@
 
 #include "platform_can.h"
 #include "platform_pwm.h"
+#include "platform_boot.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -50,7 +51,45 @@ static void task_can_reset_callback() {
 }
 
 static void task_can_handle_frame(const can_frame_t* frame) {
+    can_boot_command_t boot_cmd;
+    if (can_decode_boot_command(frame, &boot_cmd)) {
+        if ((boot_cmd.target_mask & (1U << LIGHT_BOOT_NODE_ID)) == 0U) {
+            return;
+        }
+        switch (boot_cmd.type) {
+            case CAN_BOOT_COMMAND_ENTER_UPDATE: {
+                platform_boot_request_set();
+                platform_boot_reset();
+                break;
+            }
+            case CAN_BOOT_COMMAND_STATUS_REQUEST: {
+                can_boot_status_t status = {
+                    .device_id = LIGHT_BOOT_NODE_ID,
+                    .type = CAN_BOOT_STATUS_APP_READY,
+                };
+                can_frame_t status_frame = {0};
+
+                if (can_encode_boot_status(&status, &status_frame)) {
+                    if (!platform_can_transmit(&status_frame)) {
+                        debugger_log_warning(tag, "could not transmit boot status frame.");
+                    }
+                }
+
+                break;
+            }
+            case CAN_BOOT_COMMAND_RESET: {
+                platform_boot_reset();
+                break;
+            }
+            default:
+                break;
+        }
+
+        return;
+    }
+
     can_command_t cmd;
+
     if (!can_decode_command(frame, &cmd)) {
         return;
     }

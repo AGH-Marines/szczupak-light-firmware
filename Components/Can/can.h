@@ -51,16 +51,61 @@ typedef struct can_fault_status_t {
     bool power_undervoltage;
 } can_fault_status_t;
 
-bool can_encode_command(const can_command_t* cmd, can_frame_t* frame);
+typedef enum can_boot_command_type_t {
+    CAN_BOOT_COMMAND_INVALID = 0,
+    CAN_BOOT_COMMAND_ENTER_UPDATE,
+    CAN_BOOT_COMMAND_HEADER,
+    CAN_BOOT_COMMAND_SEGMENT_CHECK,
+    CAN_BOOT_COMMAND_FINISH,
+    CAN_BOOT_COMMAND_RESET,
+    CAN_BOOT_COMMAND_STATUS_REQUEST,
+} can_boot_command_type_t;
+
+typedef struct can_boot_command_t {
+    can_boot_command_type_t type;
+    uint8_t target_mask;
+    uint8_t header_part;
+    uint8_t protocol_version;
+    uint32_t header_value;
+    uint16_t segment_index;
+} can_boot_command_t;
+
+typedef enum can_boot_status_type_t {
+    CAN_BOOT_STATUS_INVALID = 0,
+    CAN_BOOT_STATUS_READY,
+    CAN_BOOT_STATUS_HEADER_SUCCESS,
+    CAN_BOOT_STATUS_HEADER_INVALID,
+    CAN_BOOT_STATUS_HEADER_TIMEOUT,
+    CAN_BOOT_STATUS_SEGMENT,
+    CAN_BOOT_STATUS_SEGMENT_TIMEOUT,
+    CAN_BOOT_STATUS_FINISH_SUCCESS,
+    CAN_BOOT_STATUS_CRC_MISMATCH,
+    CAN_BOOT_STATUS_FLASH_ERROR,
+    CAN_BOOT_STATUS_INVALID_STATE,
+    CAN_BOOT_STATUS_BOOTLOADER,
+    CAN_BOOT_STATUS_APP_READY,
+    CAN_BOOT_STATUS_APP_ERROR,
+} can_boot_status_type_t;
+
+typedef struct can_boot_status_t {
+    uint8_t device_id;
+    can_boot_status_type_t type;
+
+    uint16_t segment_index;
+    uint32_t received_bitmap;
+    uint32_t error_code;
+} can_boot_status_t;
+
 bool can_decode_command(const can_frame_t* frame, can_command_t* cmd);
 
 bool can_encode_power_status(const can_power_status_t* status, can_frame_t* frame);
-bool can_decode_power_status(const can_frame_t* frame, can_power_status_t* status);
 
 bool can_encode_current_status(const can_current_status_t* status, can_frame_t* frame);
-bool can_decode_current_status(const can_frame_t* frame, can_current_status_t* status);
 
 bool can_encode_fault_status(const can_fault_status_t* status, can_frame_t* frame);
-bool can_decode_fault_status(const can_frame_t* frame, can_fault_status_t* status);
+
+bool can_decode_boot_command(const can_frame_t* frame, can_boot_command_t* command);
+
+bool can_encode_boot_status(const can_boot_status_t* status, can_frame_t* frame);
 
 #endif /* CAN_H */

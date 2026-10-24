@@ -2,10 +2,13 @@
 
 Firmware for the Szczupak Light board. Board drives 3x 10W LED
 channels on an underwater autonomous robot, measures power on each channel, and
-detects and handles LED faults. The board support communication
+detects and handles LED faults. The board support communication 
 over UART, USB, and CAN.
 
-This repository is the first real project built on the firmware template that AGH Marines Science Club uses as its base code structure.
+The project includes a custom bootloader with the ability 
+to flash firmware via CAN. The application includes fault recovery mechanism that records fatal errors and resets MCU into the bootloader. 
+The bootloader prevents faulty application from restarting, reports the error status over CAN and remains ready to receive new firmware.
+
 
 ---
 
@@ -16,8 +19,5 @@ This repository is the first real project built on the firmware template that AG
 * Ninja
 * ARM GNU Toolchain
 * OpenOCD
-* GDB Multiarch
-* VS Code
-* CMake Tools, C/C++, and Cortex-Debug extensions
 
 ---
